@@ -1,0 +1,23 @@
+{
+  "name": "academic-helpdesk",
+  "version": "1.0.0",
+  "description": "Academic Helpdesk & Knowledge Hub — MERN stack with NLP text-analytics, bottom-up assignment and a 24-working-hour SLA engine.",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "seed": "npm --prefix server run seed",
+    "seed:fresh": "npm --prefix server run seed:fresh",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "dev": "concurrently -n server,client -c blue,green \"npm:server\" \"npm:client\"",
+    "production": "npm run build && npm run start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
