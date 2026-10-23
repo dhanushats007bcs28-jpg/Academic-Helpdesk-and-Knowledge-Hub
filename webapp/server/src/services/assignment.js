@@ -34,14 +34,13 @@ export async function assignBottomUp(ticket, { env = {}, excludeIds = [], minLev
     if (!candidates.length) continue;
 
     // Prefer subject/category affinity when available.
-    const categoryTokens = String(ticket.category || '').toLowerCase().split(/\s+/);
+    const searchTerms = `${ticket.category || ''} ${ticket.subject || ''}`.toLowerCase().split(/\s+/).filter(Boolean);
     const scored = candidates.map((u) => {
       const subjects = (u.subjects || []).map((s) => s.toLowerCase());
-      const subjectMatch = subjects.some((s) =>
-        categoryTokens.some((c) => c && (s.includes(c) || c.includes(s)))
-      )
-        ? 1
-        : 0;
+      const matchedSubjects = (u.subjects || []).filter((s) =>
+        searchTerms.some((c) => c && s.toLowerCase().includes(c))
+      );
+      const subjectMatch = matchedSubjects.length > 0 ? 1 : 0;
       const deptMatch =
         ticket.department && u.department && ticket.department === u.department ? 1 : 0;
       const loadPenalty = (u.currentLoad || 0) / (u.maxOpenTickets || 6);
@@ -49,7 +48,26 @@ export async function assignBottomUp(ticket, { env = {}, excludeIds = [], minLev
       const priorityBonus = ticket.priority === 'critical' || ticket.priority === 'high' ? 0.15 : 0;
       const score =
         subjectMatch * 0.45 + deptMatch * 0.25 + capacity * 0.2 + priorityBonus - loadPenalty * 0.3;
-      return { user: u, score };
+
+      const levelTitle = level === 3 ? 'HOD' : level === 2 ? 'Senior Faculty' : 'Junior Faculty';
+      const explanationText = `Selected ${u.name} (${levelTitle}, Level ${level}): ${
+        matchedSubjects.length ? `matched subject specialization [${matchedSubjects.join(', ')}] (+0.45)` : 'general department coverage (+0.00)'
+      }, department match ${deptMatch ? 'CSE (+0.25)' : 'none'}, active workload ${u.currentLoad || 0}/${u.maxOpenTickets || 6} (penalty ${(loadPenalty * 0.3).toFixed(2)}). Total affinity score: ${score.toFixed(2)}.`;
+
+      return {
+        user: u,
+        score,
+        explanationText,
+        scores: {
+          subjectMatch,
+          matchedSubjects,
+          deptMatch,
+          capacity,
+          loadPenalty: Number((loadPenalty * 0.3).toFixed(2)),
+          priorityBonus,
+          totalScore: Number(score.toFixed(2)),
+        },
+      };
     });
 
     const eligible = scored
@@ -62,10 +80,13 @@ export async function assignBottomUp(ticket, { env = {}, excludeIds = [], minLev
       return {
         assignee: chosen.user,
         level,
+        score: chosen.score,
+        scores: chosen.scores,
+        explanation: chosen.explanationText,
         reason:
           level === 3
             ? 'Escalated to HOD (final rung of bottom-up ladder)'
-            : `Assigned to level-${level} ${role} (lowest available rung)`,
+            : `Assigned to level-${level} ${role} (lowest available rung). ${chosen.explanationText}`,
       };
     }
   }

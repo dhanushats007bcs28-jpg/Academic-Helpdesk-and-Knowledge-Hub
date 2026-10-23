@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, MessageSquarePlus, Library, Ticket, Bell, User, Settings, LogOut,
   Users, ClipboardList, BarChart3, GraduationCap, Building2, ShieldCheck, Activity,
-  Timer, BookOpen, Menu, X, FileClock, UserCog, Layers,
+  Timer, BookOpen, Menu, X, FileClock, UserCog, Layers, Network, FolderOpen,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -12,15 +12,17 @@ export const initials = (name = '') =>
 
 const NAV = {
   student: [
-    { label: 'Main', items: [
+    { label: 'Helpdesk & Doubt Resolution', items: [
       { to: '/student', icon: LayoutDashboard, text: 'Dashboard', end: true },
       { to: '/student/ask', icon: MessageSquarePlus, text: 'Ask a Query' },
-      { to: '/student/knowledge', icon: Library, text: 'Knowledge Base' },
       { to: '/student/tickets', icon: Ticket, text: 'My Tickets' },
+      { to: '/student/knowledge', icon: Library, text: 'Knowledge Hub' },
     ]},
-    { label: 'Academic', items: [
-      { to: '/student/profile', icon: User, text: 'My Profile' },
-      { to: '/student/academics', icon: GraduationCap, text: 'Academic Info' },
+    { label: 'Academic & Projects', items: [
+      { to: '/student/resources', icon: FolderOpen, text: 'Study Materials' },
+      { to: '/student/graph', icon: Network, text: 'Knowledge Graph' },
+      { to: '/student/projects', icon: Layers, text: 'Project Pulse' },
+      { to: '/student/academics', icon: GraduationCap, text: 'Academic Profile' },
       { to: '/student/notifications', icon: Bell, text: 'Notifications', badge: 'unread' },
     ]},
   ],
@@ -28,7 +30,10 @@ const NAV = {
     { label: 'Workspace', items: [
       { to: '/faculty', icon: LayoutDashboard, text: 'Dashboard', end: true },
       { to: '/faculty/tickets', icon: Ticket, text: 'Assigned Tickets', badge: 'queue' },
-      { to: '/faculty/knowledge', icon: Library, text: 'Knowledge Base' },
+      { to: '/faculty/knowledge', icon: Library, text: 'Knowledge Hub' },
+      { to: '/faculty/resources', icon: FolderOpen, text: 'Study Resources' },
+      { to: '/faculty/graph', icon: Network, text: 'Knowledge Graph' },
+      { to: '/faculty/projects', icon: Layers, text: 'Project Mentoring' },
       { to: '/faculty/availability', icon: Timer, text: 'Availability & Load' },
     ]},
     { label: 'Insights', items: [
@@ -39,15 +44,15 @@ const NAV = {
     ]},
   ],
   hod: [
-    { label: 'Department', items: [
-      { to: '/hod', icon: LayoutDashboard, text: 'Dashboard', end: true },
+    { label: 'Department Leadership', items: [
+      { to: '/hod', icon: LayoutDashboard, text: 'Department Dashboard', end: true },
       { to: '/hod/tickets', icon: Ticket, text: 'Department Tickets', badge: 'dept' },
       { to: '/hod/escalations', icon: Layers, text: 'Escalations' },
+      { to: '/hod/recurring', icon: FileClock, text: 'Academic Pulse' },
       { to: '/hod/faculty', icon: UserCog, text: 'Faculty Workload' },
-    ]},
-    { label: 'Analysis', items: [
-      { to: '/hod/recurring', icon: FileClock, text: 'Recurring Queries' },
-      { to: '/hod/knowledge', icon: BookOpen, text: 'Knowledge Base' },
+      { to: '/hod/projects', icon: Layers, text: 'Department Projects' },
+      { to: '/hod/graph', icon: Network, text: 'Knowledge Graph' },
+      { to: '/hod/resources', icon: FolderOpen, text: 'Study Resources' },
       { to: '/hod/notifications', icon: Bell, text: 'Notifications', badge: 'unread' },
       { to: '/hod/profile', icon: User, text: 'Profile' },
     ]},
@@ -59,13 +64,16 @@ const NAV = {
       { to: '/admin/sla', icon: Timer, text: 'SLA Monitor', badge: 'sla' },
       { to: '/admin/analytics', icon: BarChart3, text: 'Analytics' },
     ]},
-    { label: 'Manage Users', items: [
+    { label: 'Manage Identity', items: [
+      { to: '/admin/allowlist', icon: ShieldCheck, text: 'Student Allowlist' },
       { to: '/admin/students', icon: GraduationCap, text: 'Students' },
       { to: '/admin/faculty', icon: Users, text: 'Faculty' },
       { to: '/admin/hods', icon: Building2, text: 'HODs' },
     ]},
-    { label: 'System', items: [
+    { label: 'System & Knowledge', items: [
       { to: '/admin/knowledge', icon: BookOpen, text: 'Knowledge Base' },
+      { to: '/admin/resources', icon: FolderOpen, text: 'Study Resources' },
+      { to: '/admin/graph', icon: Network, text: 'Knowledge Graph' },
       { to: '/admin/activity', icon: Activity, text: 'Activity Log' },
       { to: '/admin/notifications', icon: Bell, text: 'Notifications', badge: 'unread' },
       { to: '/admin/profile', icon: Settings, text: 'Settings' },

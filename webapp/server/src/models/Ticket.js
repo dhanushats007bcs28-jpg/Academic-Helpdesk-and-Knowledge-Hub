@@ -28,6 +28,8 @@ const ticketSchema = new mongoose.Schema(
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     assignedAt: { type: Date },
     assignmentLevel: { type: Number, default: 0 }, // which rung of the ladder it sits on
+    assignmentExplanation: { type: String, default: '' },
+    assignmentScores: { type: mongoose.Schema.Types.Mixed, default: {} },
     escalationHistory: [
       {
         from: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

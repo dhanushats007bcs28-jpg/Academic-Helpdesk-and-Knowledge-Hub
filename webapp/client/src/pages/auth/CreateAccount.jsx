@@ -1,102 +1,211 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle2, ShieldCheck, AlertCircle, ArrowRight } from 'lucide-react';
+import toast from 'react-hot-toast';
+import api, { errText } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function CreateAccount() {
-  const { register } = useAuth();
+  const { login } = useAuth();
   const nav = useNavigate();
-  const [form, setForm] = useState({
-    name: '', email: '', password: '', rollNumber: '',
-    department: 'Computer Science & Engineering', year: 3, semester: 5, section: 'A', phone: '',
-  });
-  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [eligibleData, setEligibleData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setBusy(true);
+  const checkEligibility = async (e) => {
+    if (e) e.preventDefault();
+    if (!email.trim()) {
+      toast.error('Please enter your institutional email');
+      return;
+    }
+    setChecking(true);
+    setErrorMsg('');
+    setEligibleData(null);
     try {
-      await register({ ...form, role: 'student', year: Number(form.year), semester: Number(form.semester) });
+      const { data } = await api.post('/auth/check-eligibility', { email: email.trim() });
+      if (data.eligible) {
+        setEligibleData(data.student);
+        toast.success(`Verified: ${data.student.name} (${data.student.rollNumber})`);
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || errText(err);
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const submitRegistration = async (e) => {
+    e.preventDefault();
+    if (!eligibleData) {
+      toast.error('Please verify your email eligibility first');
+      return;
+    }
+    if (!password || password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post('/auth/register', {
+        email: email.trim(),
+        password,
+        phone,
+      });
+      toast.success('Registration successful! Signing you in...');
+      await login(email.trim(), password);
       nav('/student', { replace: true });
-    } catch { /* handled */ } finally { setBusy(false); }
+    } catch (err) {
+      toast.error(errText(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="auth-wrap">
       <section className="auth-brand">
         <div className="b-logo">◈</div>
-        <h1>Join the Academic<br />Helpdesk</h1>
+        <h1>
+          MEPCO Schlenk<br />Engineering College
+        </h1>
         <p className="b-lead">
-          Create your student account to ask questions, search the knowledge base and track your
-          tickets. Your academic details help us route queries to the right faculty automatically.
+          Official Student Registration Portal. Access verified learning resources, raise doubts to course faculty, and collaborate on department innovation projects.
         </p>
         <div className="b-points">
-          <div className="b-point"><span className="tick">✓</span> Free knowledge base access</div>
-          <div className="b-point"><span className="tick">✓</span> Track every ticket in real time</div>
-          <div className="b-point"><span className="tick">✓</span> Get notified on faculty replies</div>
+          <div className="b-point">
+            <span className="tick">✓</span> Admin-verified student allowlist access
+          </div>
+          <div className="b-point">
+            <span className="tick">✓</span> Bound to verified roll number &amp; batch
+          </div>
+          <div className="b-point">
+            <span className="tick">✓</span> 24-working-hour SLA for faculty responses
+          </div>
         </div>
       </section>
 
       <section className="auth-panel">
         <div className="auth-box">
           <div className="eyebrow">Student Registration</div>
-          <h2>Create your account</h2>
-          <p className="sub">Only students may self-register. Faculty and HOD accounts are provisioned by the administrator.</p>
+          <h2>Activate your account</h2>
+          <p className="sub">
+            Self-registration requires an approved student record in the college allowlist (CSE Batch 2024–2028).
+          </p>
 
-          <form onSubmit={submit}>
-            <div className="field">
-              <label>Full Name</label>
-              <input value={form.name} onChange={set('name')} placeholder="e.g. Dhanush Selvaraj" required />
-            </div>
-            <div className="form-row">
+          {!eligibleData ? (
+            <form onSubmit={checkEligibility} style={{ display: 'grid', gap: 16 }}>
               <div className="field">
-                <label>Institutional Email</label>
-                <input type="email" value={form.email} onChange={set('email')} placeholder="you@mepcoeng.ac.in" required />
+                <label>Institutional Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setErrorMsg('');
+                  }}
+                  placeholder="e.g. kulandai.kvn_bcs28@mepcoeng.ac.in"
+                  required
+                />
+                <span style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                  Enter your registered institutional or approved batch email.
+                </span>
               </div>
-              <div className="field">
-                <label>Password</label>
-                <input type="password" value={form.password} onChange={set('password')} placeholder="min 6 characters" minLength={6} required />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="field">
-                <label>Roll Number</label>
-                <input value={form.rollNumber} onChange={set('rollNumber')} placeholder="e.g. 22CSR001" />
-              </div>
-              <div className="field">
-                <label>Department</label>
-                <select value={form.department} onChange={set('department')}>
-                  <option>Computer Science & Engineering</option>
-                  <option>Electronics & Communication Engineering</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-row-3">
-              <div className="field">
-                <label>Year</label>
-                <select value={form.year} onChange={set('year')}>
-                  <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Semester</label>
-                <select value={form.semester} onChange={set('semester')}>
-                  {[1,2,3,4,5,6,7,8].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Section</label>
-                <input value={form.section} onChange={set('section')} placeholder="A" />
-              </div>
-            </div>
-            <button className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
-              {busy && <Loader2 size={17} className="spin" />} Create Account
-            </button>
-          </form>
 
-          <div className="auth-switch">Already registered? <Link to="/login">Sign in</Link></div>
+              {errorMsg && (
+                <div className="alert danger" style={{ fontSize: 13.5, padding: 12 }}>
+                  <AlertCircle size={18} />
+                  <div>{errorMsg}</div>
+                </div>
+              )}
+
+              <button className="btn btn-primary" type="submit" disabled={checking} style={{ width: '100%' }}>
+                {checking ? <Loader2 size={17} className="spin" /> : <ShieldCheck size={17} />} Verify Eligibility
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={submitRegistration} style={{ display: 'grid', gap: 16 }}>
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 10,
+                  padding: 16,
+                  display: 'grid',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#166534', fontWeight: 600 }}>
+                  <CheckCircle2 size={18} />
+                  <span>Verified Allowlist Record Found</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, fontSize: 13, marginTop: 4 }}>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>Student Name:</span>
+                    <div style={{ fontWeight: 600, color: '#1a3450' }}>{eligibleData.name}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>Register Number:</span>
+                    <div style={{ fontWeight: 600, color: 'var(--blue)' }}>{eligibleData.rollNumber}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>Department:</span>
+                    <div style={{ fontWeight: 600 }}>{eligibleData.department}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>Batch &amp; Semester:</span>
+                    <div style={{ fontWeight: 600 }}>
+                      {eligibleData.batch} · Sem {eligibleData.semester}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Set Account Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label>Contact Phone (Optional)</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. +91 98765 43210"
+                />
+              </div>
+
+              <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: '100%' }}>
+                {submitting ? <Loader2 size={17} className="spin" /> : <ArrowRight size={17} />} Complete Registration &amp; Sign In
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setEligibleData(null)}
+                style={{ width: '100%', fontSize: 13 }}
+              >
+                Use a different email
+              </button>
+            </form>
+          )}
+
+          <div className="auth-switch">
+            Already registered? <Link to="/login">Sign in to your portal</Link>
+          </div>
         </div>
       </section>
     </div>

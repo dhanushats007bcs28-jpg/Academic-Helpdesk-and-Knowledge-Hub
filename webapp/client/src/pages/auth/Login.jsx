@@ -4,17 +4,17 @@ import { GraduationCap, Users, Building2, ShieldCheck, Loader2 } from 'lucide-re
 import { useAuth } from '../../context/AuthContext.jsx';
 
 const ROLES = [
-  { key: 'student', label: 'Student', icon: GraduationCap, email: 'student@mepcoeng.ac.in', pw: 'student123' },
-  { key: 'faculty', label: 'Faculty', icon: Users, email: 'selvam.m@mepcoeng.ac.in', pw: 'faculty123' },
-  { key: 'hod', label: 'HOD', icon: Building2, email: 'hod.cse@mepcoeng.ac.in', pw: 'hod123' },
-  { key: 'admin', label: 'Admin', icon: ShieldCheck, email: 'admin@mepcoeng.ac.in', pw: 'admin123' },
+  { key: 'student', label: 'Student', icon: GraduationCap, email: 'dhanushats007_bcs28@mepcoeng.ac.in', pw: 'student123', sub: 'DHANUSHA T S (24BCS100)' },
+  { key: 'faculty', label: 'Faculty', icon: Users, email: 'sdevi@mepcoeng.ac.in', pw: 'faculty123', sub: 'Dr. S. Devi Mahalakshmi (Prof.)' },
+  { key: 'hod', label: 'HOD', icon: Building2, email: 'jrsekar@mepcoeng.ac.in', pw: 'hod123', sub: 'Dr. J. Raja Sekar (Sr.Prof.&HOD)' },
+  { key: 'admin', label: 'Admin', icon: ShieldCheck, email: 'admin@mepcoeng.ac.in', pw: 'admin123', sub: 'Academic Administrator' },
 ];
 
 export default function Login() {
   const { login, homeFor } = useAuth();
   const nav = useNavigate();
   const [tab, setTab] = useState('student');
-  const [email, setEmail] = useState('student@mepcoeng.ac.in');
+  const [email, setEmail] = useState('dhanushats007_bcs28@mepcoeng.ac.in');
   const [password, setPassword] = useState('student123');
   const [busy, setBusy] = useState(false);
 

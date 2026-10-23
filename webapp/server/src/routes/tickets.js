@@ -143,12 +143,14 @@ router.post(
       kbMatches: matches.map((m) => ({ article: m.article, score: m.score, title: m.title })),
     });
 
-    // Bottom-up assignment.
-    const { assignee, level, reason } = await assignBottomUp(ticket, { env: process.env });
+    // Bottom-up assignment with transparent explainability.
+    const { assignee, level, reason, explanation, scores } = await assignBottomUp(ticket, { env: process.env });
     if (assignee) {
       ticket.assignedTo = assignee._id;
       ticket.assignedAt = new Date();
       ticket.assignmentLevel = level;
+      ticket.assignmentExplanation = explanation || reason;
+      ticket.assignmentScores = scores || {};
       ticket.status = 'assigned';
       ticket.escalationHistory.push({ to: assignee._id, level, reason, at: new Date() });
       await User.updateOne({ _id: assignee._id }, { $inc: { currentLoad: 1 } });
@@ -458,6 +460,62 @@ router.get(
       .sort({ createdAt: -1 })
       .lean();
     res.json({ items: tickets });
+  })
+);
+
+/** Convert a resolved faculty answer into a verified or draft Knowledge Base article */
+router.post(
+  '/tickets/:id/convert-to-kb',
+  requireAuth,
+  requireRole('faculty', 'hod', 'admin'),
+  asyncHandler(async (req, res) => {
+    const { title, question, answer, category, subject, tags = [] } = req.body || {};
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    const articleTitle = title || ticket.subject;
+    const articleQuestion = question || ticket.description;
+    const articleAnswer = answer || ticket.resolution?.summary;
+
+    if (!articleAnswer) {
+      return res.status(400).json({ error: 'Cannot create KB article without a resolved answer.' });
+    }
+
+    const { tokens, lemmas } = preprocess(`${articleTitle} ${articleQuestion} ${articleAnswer} ${tags.join(' ')}`);
+    const { termFrequency } = await import('../services/nlp/engine.js');
+    const tf = termFrequency(lemmas);
+    const tfObj = {};
+    for (const [k, v] of tf) tfObj[k] = v;
+
+    const isHodOrAdmin = ['hod', 'admin'].includes(req.user.role);
+
+    const article = await KbArticle.create({
+      title: articleTitle,
+      question: articleQuestion,
+      answer: articleAnswer,
+      category: category || ticket.category || 'General',
+      department: ticket.department || req.user.department || 'Computer Science and Engineering',
+      subject: subject || ticket.subject || '',
+      tags: Array.isArray(tags) ? tags : String(tags).split(',').map((t) => t.trim()).filter(Boolean),
+      tokenized: tokens,
+      lemmas,
+      termFreq: tfObj,
+      createdBy: req.user._id,
+      verifiedBy: isHodOrAdmin ? req.user._id : null,
+      status: isHodOrAdmin ? 'published' : 'pending_review',
+      source: 'resolved_ticket',
+      derivedFromTicket: ticket._id,
+    });
+
+    await logActivity({
+      actor: req.user,
+      action: 'kb.create_from_ticket',
+      entity: 'KbArticle',
+      entityId: article._id,
+      detail: `Created ${article.status} article from ticket ${ticket.ticketCode}`,
+    });
+
+    res.status(201).json({ article, message: isHodOrAdmin ? 'Article published directly.' : 'Article submitted for HOD review.' });
   })
 );
 

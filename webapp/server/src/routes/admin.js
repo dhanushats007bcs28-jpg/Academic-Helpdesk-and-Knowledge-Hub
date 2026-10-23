@@ -310,4 +310,154 @@ router.post(
   })
 );
 
+/* ------------------- STUDENT ALLOWLIST MANAGEMENT --------------- */
+router.get(
+  '/allowlist',
+  asyncHandler(async (req, res) => {
+    const { q, isClaimed } = req.query;
+    const { RegistrationEligibility } = await import('../models/RegistrationEligibility.js');
+    const filter = {};
+    if (isClaimed !== undefined && isClaimed !== '') filter.isClaimed = isClaimed === 'true';
+    if (q) {
+      filter.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+        { rollNumber: { $regex: q, $options: 'i' } },
+      ];
+    }
+    const items = await RegistrationEligibility.find(filter)
+      .populate('claimedBy', 'name email lastLoginAt')
+      .sort({ rollNumber: 1 })
+      .lean();
+
+    const counts = {
+      total: await RegistrationEligibility.countDocuments(),
+      claimed: await RegistrationEligibility.countDocuments({ isClaimed: true }),
+      unclaimed: await RegistrationEligibility.countDocuments({ isClaimed: false }),
+    };
+
+    res.json({ items, counts });
+  })
+);
+
+router.post(
+  '/allowlist',
+  asyncHandler(async (req, res) => {
+    const { name, email, rollNumber, department = 'Computer Science and Engineering', batch = '2024-2028', semester = 5, section = 'A' } = req.body || {};
+    if (!name || !email || !rollNumber) return res.status(400).json({ error: 'Name, email, and roll number are required' });
+    const { RegistrationEligibility } = await import('../models/RegistrationEligibility.js');
+
+    const exists = await RegistrationEligibility.findOne({ $or: [{ email: email.toLowerCase() }, { rollNumber }] });
+    if (exists) return res.status(409).json({ error: 'Student with this email or roll number already in allowlist' });
+
+    const item = await RegistrationEligibility.create({
+      name, email: email.toLowerCase(), rollNumber, department, batch, semester, section,
+    });
+    res.status(201).json({ item });
+  })
+);
+
+/* ------------------- BATCH DATA IMPORT HUB ----------------------- */
+/** Dry-run preview and confirmed commit for CSV / JSON student & staff batches. */
+router.post(
+  '/import-data',
+  asyncHandler(async (req, res) => {
+    const { type, rows, commit = false } = req.body || {};
+    if (!type || !Array.isArray(rows)) {
+      return res.status(400).json({ error: 'type (students|faculty|subjects) and rows array required' });
+    }
+
+    const { RegistrationEligibility } = await import('../models/RegistrationEligibility.js');
+    const { Subject } = await import('../models/Subject.js');
+
+    const results = {
+      totalRows: rows.length,
+      validRows: 0,
+      invalidRows: 0,
+      errors: [],
+      preview: [],
+    };
+
+    if (type === 'students') {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const rowNum = i + 1;
+        const errs = [];
+        if (!r.email) errs.push('Missing email');
+        if (!r.rollNumber) errs.push('Missing rollNumber');
+        if (!r.name) errs.push('Missing name');
+
+        if (errs.length) {
+          results.invalidRows++;
+          results.errors.push({ row: rowNum, errors: errs, data: r });
+          continue;
+        }
+
+        const email = String(r.email).trim().toLowerCase();
+        const dup = await RegistrationEligibility.findOne({ $or: [{ email }, { rollNumber: r.rollNumber }] });
+        if (dup && !commit) {
+          errs.push(`Duplicate: ${dup.email === email ? 'Email' : 'Roll number'} already exists`);
+        }
+
+        if (errs.length) {
+          results.invalidRows++;
+          results.errors.push({ row: rowNum, errors: errs, data: r });
+        } else {
+          results.validRows++;
+          if (commit) {
+            await RegistrationEligibility.findOneAndUpdate(
+              { email },
+              {
+                name: r.name,
+                rollNumber: r.rollNumber,
+                department: r.department || 'Computer Science and Engineering',
+                departmentCode: r.departmentCode || 'CSE',
+                batch: r.batch || '2024-2028',
+                year: Number(r.year) || 3,
+                semester: Number(r.semester) || 5,
+                section: r.section || 'A',
+                isActive: true,
+              },
+              { upsert: true, new: true }
+            );
+          } else {
+            results.preview.push({ row: rowNum, name: r.name, email, rollNumber: r.rollNumber, status: 'Valid' });
+          }
+        }
+      }
+    }
+
+    if (commit) {
+      await logActivity({
+        actor: req.user,
+        action: `import.commit.${type}`,
+        entity: 'ImportJob',
+        detail: `Imported ${results.validRows} ${type} successfully.`,
+      });
+    }
+
+    res.json({
+      success: true,
+      commit: !!commit,
+      type,
+      ...results,
+    });
+  })
+);
+
+/* ------------------- ANNOUNCEMENTS CRUD -------------------------- */
+router.post(
+  '/announcements',
+  asyncHandler(async (req, res) => {
+    const { title, content, department = 'All', category = 'academic', priority = 'normal', targetRoles = ['student', 'faculty', 'hod', 'admin'] } = req.body || {};
+    if (!title || !content) return res.status(400).json({ error: 'Title and content required' });
+    const { Announcement } = await import('../models/Announcement.js');
+
+    const announcement = await Announcement.create({
+      title, content, department, category, priority, targetRoles, author: req.user._id,
+    });
+    res.status(201).json({ announcement });
+  })
+);
+
 export default router;

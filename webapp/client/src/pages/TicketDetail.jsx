@@ -25,13 +25,40 @@ export default function TicketDetail() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
 
+  const [showKbModal, setShowKbModal] = useState(false);
+  const [kbTitle, setKbTitle] = useState('');
+  const [kbAnswer, setKbAnswer] = useState('');
+  const [kbCategory, setKbCategory] = useState('');
+  const [kbTags, setKbTags] = useState('');
+
   const load = async () => {
     try {
       const { data } = await api.get(`/tickets/${id}`);
       setTicket(data.ticket);
       setMessages(data.messages);
-      if (data.ticket.resolution?.summary) setSummary(data.ticket.resolution.summary);
+      if (data.ticket.resolution?.summary) {
+        setSummary(data.ticket.resolution.summary);
+        setKbAnswer(data.ticket.resolution.summary);
+      }
+      setKbTitle(data.ticket.subject || '');
+      setKbCategory(data.ticket.category || 'General');
     } catch (e) { toast.error(errText(e)); }
+  };
+
+  const publishToKb = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/tickets/${id}/convert-to-kb`, {
+        title: kbTitle,
+        question: ticket.description,
+        answer: kbAnswer,
+        category: kbCategory,
+        tags: kbTags.split(',').map((t) => t.trim()).filter(Boolean),
+      });
+      toast.success(data.message || 'Article published to Knowledge Base!');
+      setShowKbModal(false);
+      await load();
+    } catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
@@ -106,6 +133,11 @@ export default function TicketDetail() {
                 <button className="btn btn-dark btn-sm" onClick={() => setShowEscalate(true)}><ArrowUpCircle size={16} /> Escalate</button>
               )}
             </>
+          )}
+          {canAct && ['resolved', 'closed'].includes(ticket.status) && (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowKbModal(true)} style={{ background: '#7c3aed' }}>
+              <Sparkles size={16} /> Convert to KB Guide
+            </button>
           )}
           {isStudent && ['resolved'].includes(ticket.status) && !ticket.feedback?.rating && (
             <button className="btn btn-primary btn-sm" onClick={() => setRatingModal(true)}>Rate Resolution</button>
@@ -183,6 +215,14 @@ export default function TicketDetail() {
               </div>
               <div style={{ marginTop: 20 }}><div className="k" style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>DESCRIPTION</div>
                 <p style={{ color: '#2b455f', fontSize: 14.5 }}>{ticket.description}</p></div>
+              {ticket.assignmentExplanation && (
+                <div style={{ marginTop: 14, background: '#f0f9ff', padding: '10px 14px', borderRadius: 8, border: '1px solid #bae6fd' }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0369a1', marginBottom: 4, letterSpacing: '0.04em' }}>
+                    EXPLAINABLE FACULTY ASSIGNMENT RATIONALE
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#0c4a6e', lineHeight: 1.5 }}>{ticket.assignmentExplanation}</div>
+                </div>
+              )}
               {ticket.queryLemmas?.length > 0 && (
                 <div style={{ marginTop: 18 }}>
                   <div className="k" style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>NLP KEYWORDS (after stop-word removal + lemmatization)</div>
@@ -251,6 +291,47 @@ export default function TicketDetail() {
             </div></div>
           <div className="field"><label>Comment (optional)</label>
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Anything you'd like to add…" /></div>
+        </Modal>
+      )}
+
+      {showKbModal && (
+        <Modal
+          title="Convert Faculty Answer to Knowledge Hub Guide"
+          onClose={() => setShowKbModal(false)}
+          footer={
+            <>
+              <button className="btn btn-ghost" onClick={() => setShowKbModal(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" disabled={busy || !kbAnswer.trim()} onClick={publishToKb}>
+                Publish Knowledge Article
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: 'grid', gap: 14 }}>
+            <p style={{ fontSize: 13, color: '#64748b' }}>
+              Promote this resolved answer into an official knowledge base guide. The NLP engine will automatically index tokens and lemmas for future student search matching.
+            </p>
+            <div className="field">
+              <label>Article Title</label>
+              <input value={kbTitle} onChange={(e) => setKbTitle(e.target.value)} required />
+            </div>
+            <div className="form-row">
+              <div className="field">
+                <label>Category</label>
+                <input value={kbCategory} onChange={(e) => setKbCategory(e.target.value)} required />
+              </div>
+              <div className="field">
+                <label>Tags (comma-separated)</label>
+                <input value={kbTags} onChange={(e) => setKbTags(e.target.value)} placeholder="e.g. dbms, normalization, 3nf" />
+              </div>
+            </div>
+            <div className="field">
+              <label>Answer Explanation Body</label>
+              <textarea value={kbAnswer} onChange={(e) => setKbAnswer(e.target.value)} rows={6} required />
+            </div>
+          </div>
         </Modal>
       )}
     </Layout>

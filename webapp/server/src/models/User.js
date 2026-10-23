@@ -30,10 +30,13 @@ const userSchema = new mongoose.Schema(
     cgpa: { type: Number },
     attendance: { type: Number },
     advisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    registrationEligibility: { type: mongoose.Schema.Types.ObjectId, ref: 'RegistrationEligibility' },
 
     /* ---------- Faculty / HOD fields ---------- */
     employeeId: { type: String, sparse: true, index: true },
     designation: { type: String, default: '' },
+    qualification: { type: String, default: '' },
+    teachingExperienceYears: { type: Number, default: 0 },
     subjects: [{ type: String }],
     /* Bottom-up escalation ladder. Lower `level` = more junior.
        Faculty level 1 -> senior faculty level 2 -> HOD level 3. */
@@ -46,6 +49,7 @@ const userSchema = new mongoose.Schema(
     /* ---------- HOD fields ---------- */
     hodOf: { type: String, default: '' }, // department the HOD heads
 
+    validationFlags: [{ type: String }],
     lastLoginAt: { type: Date },
   },
   { timestamps: true }

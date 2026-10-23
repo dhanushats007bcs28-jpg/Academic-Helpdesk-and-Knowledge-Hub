@@ -120,23 +120,32 @@ export function matchKnowledgeBase(queryText, articles, { threshold = 0.18, limi
     const cosine = cosineSimilarity(queryVec, docVec);
     // exact term-overlap boost
     const qSet = new Set(queryLemmas);
-    const overlap = terms.filter((t) => qSet.has(t)).length;
+    const matchedTerms = [...new Set(terms.filter((t) => qSet.has(t)))];
+    const overlap = matchedTerms.length;
     const boost = Math.min(overlap / (queryLemmas.length || 1), 1) * 0.25;
-    return { article, score: Math.min(cosine + boost, 1), overlap };
+    return { article, score: Math.min(cosine + boost, 1), overlap, cosine, boost, matchedTerms };
   });
 
   return scored
     .filter((s) => s.score >= threshold && s.overlap > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map((s) => ({
-      article: s.article._id,
-      title: s.article.title,
-      category: s.article.category,
-      answer: s.article.answer,
-      score: Number(s.score.toFixed(4)),
-      confidence: s.score >= 0.55 ? 'high' : s.score >= 0.35 ? 'medium' : 'low',
-    }));
+    .map((s) => {
+      const confidence = s.score >= 0.55 ? 'high' : s.score >= 0.35 ? 'medium' : 'low';
+      const termList = s.matchedTerms.slice(0, 4).join(', ');
+      const explanation = `Matched ${s.matchedTerms.length} core technical terms (${termList}) in ${s.article.subject || s.article.category} with ${(s.score * 100).toFixed(1)}% TF-IDF cosine relevance.`;
+      return {
+        article: s.article._id,
+        title: s.article.title,
+        category: s.article.category,
+        subject: s.article.subject,
+        answer: s.article.answer,
+        score: Number(s.score.toFixed(4)),
+        confidence,
+        matchedTerms: s.matchedTerms,
+        explanation,
+      };
+    });
 }
 
 /** Category classifier — nearest category by TF-IDF among ticket history. */

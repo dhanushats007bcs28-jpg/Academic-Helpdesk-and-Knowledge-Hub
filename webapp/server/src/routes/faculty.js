@@ -92,22 +92,115 @@ router.get(
   })
 );
 
-/** HOD: recurring-query detection via NLP clustering of ticket lemmas. */
+/** HOD: Academic Pulse — Knowledge Gap Detection & Recurring Query Intelligence. */
 router.get(
   '/department/recurring',
-  requireRole('hod'),
+  requireRole('hod', 'faculty'),
   asyncHandler(async (req, res) => {
-    const dept = req.user.hodOf || req.user.department;
-    const tickets = await Ticket.find({ department: dept }).select('subject queryLemmas category createdAt').lean();
+    const dept = req.user.hodOf || req.user.department || 'Computer Science and Engineering';
+    const { KbArticle } = await import('../models/KbArticle.js');
+    const [tickets, articles] = await Promise.all([
+      Ticket.find({ department: dept }).select('subject queryLemmas category status createdAt').lean(),
+      KbArticle.find({ department: { $in: [dept, 'Common'] } }).select('title category tags lemmas').lean(),
+    ]);
 
     const clusters = {};
     for (const t of tickets) {
       const key = (t.queryLemmas || []).slice(0, 3).sort().join(' ') || t.category;
-      clusters[key] = clusters[key] || { keywords: key.split(' '), count: 0, sample: t.subject, category: t.category };
+      if (!key) continue;
+      clusters[key] = clusters[key] || {
+        keywords: key.split(' '),
+        count: 0,
+        sample: t.subject,
+        category: t.category,
+        unresolvedCount: 0,
+      };
       clusters[key].count++;
+      if (!['resolved', 'closed'].includes(t.status)) clusters[key].unresolvedCount++;
     }
-    const recurring = Object.values(clusters).sort((a, b) => b.count - a.count).slice(0, 10);
-    res.json({ recurring });
+
+    // Correlate with KB coverage to detect genuine knowledge gaps
+    const pulseItems = Object.values(clusters).map((c) => {
+      const matchedArticle = articles.find((a) =>
+        c.keywords.some((kw) => (a.tags || []).includes(kw) || (a.lemmas || []).includes(kw))
+      );
+      const isKnowledgeGap = !matchedArticle;
+      const severity = c.count >= 3 && isKnowledgeGap ? 'critical' : isKnowledgeGap ? 'moderate' : 'covered';
+      return {
+        ...c,
+        hasKbArticle: !!matchedArticle,
+        matchedArticleTitle: matchedArticle ? matchedArticle.title : null,
+        isKnowledgeGap,
+        severity,
+        recommendation: isKnowledgeGap
+          ? `High student demand: Consider publishing a verified guide on "${c.sample}".`
+          : `Covered by article: "${matchedArticle.title}".`,
+      };
+    });
+
+    const sorted = pulseItems.sort((a, b) => b.count - a.count);
+    const knowledgeGaps = sorted.filter((p) => p.isKnowledgeGap);
+
+    res.json({
+      recurring: sorted.slice(0, 12),
+      knowledgeGaps: knowledgeGaps.slice(0, 6),
+      totalQueriesAnalyzed: tickets.length,
+      totalGapsDetected: knowledgeGaps.length,
+    });
+  })
+);
+
+/* ----------------------- PROJECT PULSE -------------------------- */
+router.get(
+  '/projects',
+  asyncHandler(async (req, res) => {
+    const { Project } = await import('../models/Project.js');
+    const filter = req.user.role === 'hod'
+      ? { department: req.user.hodOf || req.user.department }
+      : { mentor: req.user._id };
+    const projects = await Project.find(filter)
+      .populate('mentor', 'name designation email')
+      .populate('members.student', 'name rollNumber email')
+      .sort({ updatedAt: -1 })
+      .lean();
+    res.json({ projects });
+  })
+);
+
+router.post(
+  '/projects/:id/feedback',
+  asyncHandler(async (req, res) => {
+    const { content } = req.body || {};
+    if (!content) return res.status(400).json({ error: 'Feedback content required' });
+    const { Project } = await import('../models/Project.js');
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    project.mentorFeedback.push({
+      mentor: req.user._id,
+      content,
+      createdAt: new Date(),
+    });
+    await project.save();
+    res.json({ project });
+  })
+);
+
+router.patch(
+  '/projects/:id/milestones/:mIndex',
+  asyncHandler(async (req, res) => {
+    const { isCompleted } = req.body || {};
+    const { Project } = await import('../models/Project.js');
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const idx = Number(req.params.mIndex);
+    if (project.milestones[idx]) {
+      project.milestones[idx].isCompleted = !!isCompleted;
+      project.milestones[idx].completedAt = isCompleted ? new Date() : null;
+      await project.save();
+    }
+    res.json({ project });
   })
 );
 

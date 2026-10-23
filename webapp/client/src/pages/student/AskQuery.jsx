@@ -137,7 +137,12 @@ export default function AskQuery() {
                         <span className={`pill ${m.confidence === 'high' ? 'resolved' : m.confidence === 'medium' ? 'medium' : 'muted'}`}>{m.confidence}</span>
                       </div>
                       <ConfidenceBar score={m.score} />
-                      <p style={{ fontSize: 13, color: '#3b5670', marginTop: 10 }}>{String(m.answer).slice(0, 150)}…</p>
+                      {m.explanation && (
+                        <div style={{ background: 'rgba(37,99,235,0.06)', borderRadius: 8, padding: '8px 10px', marginTop: 8, fontSize: 12, color: '#1e40af', border: '1px solid rgba(37,99,235,0.12)' }}>
+                          <span style={{ fontWeight: 600 }}>Why this matched: </span>{m.explanation}
+                        </div>
+                      )}
+                      <p style={{ fontSize: 13, color: '#3b5670', marginTop: 8 }}>{String(m.answer).slice(0, 150)}…</p>
                     </div>
                   ))}
                 </>

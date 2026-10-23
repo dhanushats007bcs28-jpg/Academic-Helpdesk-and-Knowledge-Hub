@@ -22,8 +22,17 @@ const kbArticleSchema = new mongoose.Schema(
 
     views: { type: Number, default: 0 },
     helpful: { type: Number, default: 0 },
+    unhelpful: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    source: { type: String, enum: ['seed', 'faculty', 'admin'], default: 'seed' },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    status: {
+      type: String,
+      enum: ['draft', 'pending_review', 'published', 'needs_revision', 'archived'],
+      default: 'published',
+      index: true,
+    },
+    source: { type: String, enum: ['seed', 'faculty', 'admin', 'resolved_ticket'], default: 'seed' },
+    derivedFromTicket: { type: mongoose.Schema.Types.ObjectId, ref: 'Ticket' },
   },
   { timestamps: true }
 );
