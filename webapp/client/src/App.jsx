@@ -135,9 +135,9 @@ export default function App() {
       <Route path="/admin/allowlist" element={<Protected roles={['admin']}><AdminAllowlist /></Protected>} />
       <Route path="/admin/resources" element={<Protected roles={['admin']}><ResourceHub /></Protected>} />
       <Route path="/admin/graph" element={<Protected roles={['admin']}><KnowledgeGraph /></Protected>} />
-      <Route path="/admin/students" element={<Protected roles={['admin']}><AdminUsers role="student" title="Students" /></Protected>} />
-      <Route path="/admin/faculty" element={<Protected roles={['admin']}><AdminUsers role="faculty" title="Faculty" /></Protected>} />
-      <Route path="/admin/hods" element={<Protected roles={['admin']}><AdminUsers role="hod" title="Heads of Department" /></Protected>} />
+      <Route path="/admin/students" element={<Protected roles={['admin']}><AdminUsers key="student" role="student" title="Students" /></Protected>} />
+      <Route path="/admin/faculty" element={<Protected roles={['admin']}><AdminUsers key="faculty" role="faculty" title="Faculty" /></Protected>} />
+      <Route path="/admin/hods" element={<Protected roles={['admin']}><AdminUsers key="hod" role="hod" title="Heads of Department" /></Protected>} />
       <Route path="/admin/knowledge" element={<Protected roles={['admin']}><AdminKnowledge /></Protected>} />
       <Route path="/admin/activity" element={<Protected roles={['admin']}><AdminActivity /></Protected>} />
 

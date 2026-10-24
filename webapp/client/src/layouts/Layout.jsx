@@ -128,7 +128,7 @@ export default function Layout({ children, unread = 0, extraBadges = {} }) {
             {unread > 0 && <span className="icon-badge">{unread > 99 ? '99+' : unread}</span>}
           </button>
           <div className="user-chip" onClick={() => nav(`/${user.role}/profile`)}>
-            <div className="avatar" style={{ background: user?.avatarColor || '#2563eb' }}>{initials(user?.name)}</div>
+            {user?.profileImage ? <img className="avatar" src={user.profileImage} alt="Profile" style={{ objectFit: 'cover' }} /> : <div className="avatar" style={{ background: user?.avatarColor || '#2563eb' }}>{initials(user?.name)}</div>}
             <div>
               <div className="u-name">{user?.name}</div>
               <div className="u-role">{user?.designation || user?.role?.toUpperCase()}</div>

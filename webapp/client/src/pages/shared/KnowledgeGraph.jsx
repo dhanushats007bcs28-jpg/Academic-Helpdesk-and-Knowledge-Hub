@@ -14,10 +14,12 @@ import {
 import api from '../../api/client.js';
 import Layout from '../../layouts/Layout.jsx';
 import { useShellData } from '../../App.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { Spinner } from '../../components/ui.jsx';
 
 export default function KnowledgeGraph() {
   const { unread, badges } = useShellData();
+  const { user } = useAuth();
   const [subjects, setSubjects] = useState([]);
   const [faculty, setFaculty] = useState([]);
   const [articles, setArticles] = useState([]);
@@ -27,8 +29,8 @@ export default function KnowledgeGraph() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/subjects'),
-      api.get('/faculty/directory/public'),
+      api.get('/knowledge-graph/subjects'),
+      api.get('/faculty/directory/public', { params: { department: user?.role === 'hod' ? (user.hodOf || user.department) : user?.department } }),
       api.get('/kb'),
       api.get('/resources/public'),
     ])
@@ -42,7 +44,7 @@ export default function KnowledgeGraph() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.role, user?.department, user?.semester, user?.hodOf]);
 
   if (loading) return <Layout unread={unread} extraBadges={badges}><Spinner /></Layout>;
 
@@ -74,8 +76,11 @@ export default function KnowledgeGraph() {
         {/* Subject Node Selector */}
         <div className="card" style={{ padding: 14 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 12 }}>
-            Curriculum Subject Nodes ({subjects.length})
+            Your Accessible Subjects ({subjects.length})
           </div>
+          {subjects.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>No subjects are assigned to your account yet. Ask your department administrator to verify your department, semester, or subject assignments.</p>
+          )}
 
           <div style={{ display: 'grid', gap: 6, maxHeight: 600, overflowY: 'auto' }}>
             {subjects.map((sub) => {

@@ -18,7 +18,6 @@ import { runSlaSweep } from './services/sla.js';
 
 dotenv.config();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 /* ------------------------------- middleware ------------------------------ */
@@ -40,15 +39,6 @@ app.use('/api', authRoutes);
 app.use('/api', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/faculty', facultyRoutes);
-
-/* ------------------------- serve built client (prod) --------------------- */
-const clientDist = path.resolve(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-app.get(/^(?!\/api).*/, (_req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'), (err) => {
-    if (err) res.status(200).send('Academic Helpdesk API is running. Build the client with `npm run build`.');
-  });
-});
 
 /* ------------------------------ error handler ---------------------------- */
 // eslint-disable-next-line no-unused-vars

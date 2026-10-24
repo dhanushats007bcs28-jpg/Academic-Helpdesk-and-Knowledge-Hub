@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'node:crypto';
 import { User } from '../models/User.js';
 import { requireAuth, requireRole, signToken } from '../middleware/auth.js';
 import { Notification } from '../models/Notification.js';
@@ -12,8 +13,118 @@ import { Announcement } from '../models/Announcement.js';
 import { Resource } from '../models/Resource.js';
 import { Project } from '../models/Project.js';
 import { asyncHandler, logActivity } from '../utils/helpers.js';
+import { v2 as cloudinary } from 'cloudinary';
 
 const router = Router();
+
+
+function cloudinaryConfig() {
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    const error = new Error('Profile photo storage is not configured. Set the Cloudinary environment variables on the server.');
+    error.status = 503;
+    throw error;
+  }
+  return { cloudName: CLOUDINARY_CLOUD_NAME, apiKey: CLOUDINARY_API_KEY, apiSecret: CLOUDINARY_API_SECRET };
+}
+
+function configureCloudinary() {
+  const {
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+  } = process.env;
+
+  if (
+    !CLOUDINARY_CLOUD_NAME ||
+    !CLOUDINARY_API_KEY ||
+    !CLOUDINARY_API_SECRET
+  ) {
+    const error = new Error(
+      'Cloudinary is not configured. Check the server environment variables.'
+    );
+    error.status = 503;
+    throw error;
+  }
+
+  cloudinary.config({
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET,
+    secure: true,
+  });
+
+  return cloudinary;
+}
+
+async function uploadProfileImageToCloudinary(dataUrl, userId) {
+  const client = configureCloudinary();
+
+  if (
+    typeof dataUrl !== 'string' ||
+    !/^data:image\/(jpeg|png|webp|gif);base64,/i.test(dataUrl)
+  ) {
+    const error = new Error(
+      'Upload a valid JPEG, PNG, WEBP, or GIF image.'
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  try {
+    const result = await client.uploader.upload(dataUrl, {
+      resource_type: 'image',
+      public_id: `academic-helpdesk/profiles/${userId}`,
+      overwrite: true,
+      invalidate: true,
+    });
+
+    if (!result.secure_url || !result.public_id) {
+      throw new Error('Cloudinary returned an incomplete upload result.');
+    }
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+  } catch (error) {
+    console.error('[Cloudinary upload]', error.message);
+
+    if (error.http_code === 401 || error.http_code === 403) {
+      const uploadError = new Error(
+        'Cloudinary rejected the credentials or upload permission.'
+      );
+      uploadError.status = 502;
+      throw uploadError;
+    }
+
+    const uploadError = new Error(
+      'Profile photo upload failed. Check the server connection to Cloudinary and try again.'
+    );
+    uploadError.status = 502;
+    throw uploadError;
+  }
+}
+
+async function deleteCloudinaryImage(publicId) {
+  if (!publicId) return;
+
+  const client = configureCloudinary();
+
+  try {
+    const result = await client.uploader.destroy(publicId, {
+      resource_type: 'image',
+      invalidate: true,
+    });
+
+    if (!['ok', 'not found'].includes(result.result)) {
+      throw new Error('Cloudinary could not remove the old profile photo.');
+    }
+  } catch (error) {
+    console.error('[Cloudinary delete]', error.message);
+    throw error;
+  }
+}
 
 /* ----------------------------- AUTH ----------------------------- */
 
@@ -174,8 +285,50 @@ router.patch(
   '/auth/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const allowed = ['name', 'phone', 'avatarColor', 'isAvailable', 'semester', 'section'];
-    for (const key of allowed) if (key in req.body) req.user[key] = req.body[key];
+    const common = ['name', 'phone', 'profileImage', 'bio', 'officeLocation', 'linkedin'];
+    const studentFields = ['semester', 'section'];
+    const staffFields = ['designation', 'qualification', 'teachingExperienceYears', 'subjects'];
+    const hodFields = ['hodOf'];
+    const adminFields = [];
+    const allowed = [...common,
+      ...(req.user.role === 'student' ? studentFields : []),
+      ...(req.user.role === 'faculty' ? staffFields : []),
+      ...(req.user.role === 'hod' ? [...staffFields, ...hodFields] : []),
+      ...(req.user.role === 'admin' ? adminFields : []),
+    ];
+    for (const key of allowed) {
+      if (!(key in req.body)) continue;
+      if (key === 'profileImage') {
+        const image = String(req.body[key] || '');
+        if (image.startsWith('data:image/')) {
+          if (image.length > 1400000) return res.status(400).json({ error: 'Profile photo is too large after compression. Choose a smaller image.' });
+          const uploaded = await uploadProfileImageToCloudinary(image, req.user._id.toString());
+          req.user.profileImage = uploaded.url;
+          req.user.profileImagePublicId = uploaded.publicId;
+        } else if (!image) {
+          const oldPublicId = req.user.profileImagePublicId || (req.user.profileImage?.includes('res.cloudinary.com') ? `academic-helpdesk/profiles/${req.user._id}` : '');
+          req.user.profileImage = '';
+          req.user.profileImagePublicId = '';
+          await req.user.save();
+          if (oldPublicId) {
+            try { await deleteCloudinaryImage(oldPublicId); }
+            catch (error) { console.error('[cloudinary delete]', error.message); }
+          }
+          continue;
+        } else if (/^https:\/\//i.test(image) && image === req.user.profileImage) {
+          // Keep an existing Cloudinary URL without re-uploading it.
+          req.user.profileImage = image;
+        } else {
+          return res.status(400).json({ error: 'Profile photos must be uploaded through the profile photo picker.' });
+        }
+      } else if (key === 'subjects') {
+        req.user[key] = Array.isArray(req.body[key]) ? req.body[key].slice(0, 30).map(String) : String(req.body[key] || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 30);
+      } else if (key === 'teachingExperienceYears') {
+        req.user[key] = Math.max(0, Math.min(60, Number(req.body[key]) || 0));
+      } else {
+        req.user[key] = typeof req.body[key] === 'string' ? req.body[key].trim().slice(0, key === 'bio' ? 700 : 200) : req.body[key];
+      }
+    }
     await req.user.save();
     res.json({ user: req.user.toPublic() });
   })
@@ -268,6 +421,51 @@ router.get(
   asyncHandler(async (_req, res) => {
     const list = await Department.find({ isActive: true }).populate('hod', 'name designation email').sort({ name: 1 }).lean();
     res.json({ departments: list });
+  })
+);
+
+// Authenticated, role-scoped subject list used by the Knowledge Graph.
+// Keep /subjects public for public curriculum pickers; do not use it for access control.
+router.get(
+  '/knowledge-graph/subjects',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    let filter = { isActive: true };
+
+    if (user.role === 'student') {
+      // A student only sees subjects for their own department and semester.
+      if (!user.department || !Number.isFinite(Number(user.semester))) {
+        return res.json({ subjects: [] });
+      }
+      filter.department = user.department;
+      filter.semester = Number(user.semester);
+    } else if (user.role === 'faculty') {
+      // Use explicit Subject.facultyInCharge assignments where present, and
+      // support existing faculty subject-speciality strings as a fallback.
+      if (user.department) filter.department = user.department;
+      const candidates = await Subject.find(filter).sort({ semester: 1, code: 1 }).lean();
+      const assignedIds = new Set(candidates
+        .filter((subject) => (subject.facultyInCharge || []).some((id) => String(id) === String(user._id)))
+        .map((subject) => String(subject._id)));
+      const specialities = (user.subjects || []).map((value) => String(value).trim().toLowerCase()).filter(Boolean);
+      const assigned = candidates.filter((subject) => {
+        if (assignedIds.has(String(subject._id))) return true;
+        const title = String(subject.title || '').trim().toLowerCase();
+        const code = String(subject.code || '').trim().toLowerCase();
+        return specialities.some((speciality) => speciality === title || speciality === code);
+      });
+      return res.json({ subjects: assigned });
+    } else if (user.role === 'hod') {
+      const department = user.hodOf || user.department;
+      if (!department) return res.json({ subjects: [] });
+      filter.department = department;
+    } else if (user.role !== 'admin') {
+      return res.status(403).json({ error: 'You are not allowed to view Knowledge Graph subjects.' });
+    }
+
+    const subjects = await Subject.find(filter).sort({ semester: 1, code: 1 }).lean();
+    res.json({ subjects });
   })
 );
 

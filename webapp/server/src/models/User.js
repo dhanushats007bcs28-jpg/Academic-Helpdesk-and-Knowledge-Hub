@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
     phone: { type: String, default: '' },
+    profileImage: { type: String, default: '' }, // Cloudinary secure URL
+    profileImagePublicId: { type: String, default: '', select: false }, // server-only Cloudinary identifier
+    bio: { type: String, default: '' },
+    officeLocation: { type: String, default: '' },
+    linkedin: { type: String, default: '' },
     avatarColor: { type: String, default: '#2563eb' },
     isActive: { type: Boolean, default: true },
 

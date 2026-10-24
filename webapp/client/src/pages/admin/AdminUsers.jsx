@@ -25,7 +25,7 @@ export default function AdminUsers({ role, title }) {
     const { data } = await api.get(`/admin/users?role=${role}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
     setItems(data.items);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [role, q]);
 
   const openCreate = () => setModal({ mode: 'create', data: { ...BLANK[role] } });
   const openEdit = (u) => setModal({
