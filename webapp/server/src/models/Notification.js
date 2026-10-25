@@ -11,7 +11,7 @@ const notificationSchema = new mongoose.Schema(
     body: { type: String, default: '' },
     type: {
       type: String,
-      enum: ['ticket', 'assignment', 'sla_warning', 'escalation', 'reply', 'resolved', 'system', 'kb'],
+      enum: ['ticket', 'assignment', 'sla_warning', 'escalation', 'reply', 'resolved', 'system', 'kb', 'mentorship', 'project', 'project_review', 'project_chat'],
       default: 'system',
     },
     ticket: { type: mongoose.Schema.Types.ObjectId, ref: 'Ticket' },

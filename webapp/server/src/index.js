@@ -14,6 +14,7 @@ import authRoutes from './routes/index.js';
 import ticketRoutes from './routes/tickets.js';
 import adminRoutes from './routes/admin.js';
 import facultyRoutes from './routes/faculty.js';
+import projectPulseRoutes from './routes/projectPulse.js';
 import { runSlaSweep } from './services/sla.js';
 
 dotenv.config();
@@ -24,7 +25,7 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(compression());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
@@ -39,6 +40,7 @@ app.use('/api', authRoutes);
 app.use('/api', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/faculty', facultyRoutes);
+app.use('/api/project-pulse', projectPulseRoutes);
 
 /* ------------------------------ error handler ---------------------------- */
 // eslint-disable-next-line no-unused-vars

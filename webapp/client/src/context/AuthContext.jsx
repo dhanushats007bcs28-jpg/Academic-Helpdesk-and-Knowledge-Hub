@@ -1,57 +1,91 @@
+
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import api, { errText } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+function getStoredUser() {
+  try {
     const raw = localStorage.getItem('ah_user');
     return raw ? JSON.parse(raw) : null;
-  });
+  } catch {
+    localStorage.removeItem('ah_user');
+    return null;
+  }
+}
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(getStoredUser);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('ah_token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    api
-      .get('/auth/me')
-      .then(({ data }) => {
+    let active = true;
+
+    const checkSession = async () => {
+      try {
+        const token = localStorage.getItem('ah_token');
+
+        if (!token) {
+          if (active) setUser(null);
+          localStorage.removeItem('ah_user');
+          return;
+        }
+
+        const { data } = await api.get('/auth/me');
+
+        if (!active) return;
+
         setUser(data.user);
         localStorage.setItem('ah_user', JSON.stringify(data.user));
-      })
-      .catch(() => {
+      } catch (error) {
+        if (!active) return;
+
         localStorage.removeItem('ah_token');
         localStorage.removeItem('ah_user');
         setUser(null);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const login = useCallback(async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
+
       localStorage.setItem('ah_token', data.token);
       localStorage.setItem('ah_user', JSON.stringify(data.user));
       setUser(data.user);
+
       toast.success(`Welcome back, ${data.user.name.split(' ')[0]}!`);
       return data.user;
-    } catch (e) {
-      toast.error(errText(e));
-      throw e;
+    } catch (error) {
+      toast.error(errText(error));
+      throw error;
     }
   }, []);
 
   const register = useCallback(async (payload) => {
-    const { data } = await api.post('/auth/register', payload);
-    localStorage.setItem('ah_token', data.token);
-    localStorage.setItem('ah_user', JSON.stringify(data.user));
-    setUser(data.user);
-    toast.success('Account created');
-    return data.user;
+    try {
+      const { data } = await api.post('/auth/register', payload);
+
+      localStorage.setItem('ah_token', data.token);
+      localStorage.setItem('ah_user', JSON.stringify(data.user));
+      setUser(data.user);
+
+      toast.success('Account created');
+      return data.user;
+    } catch (error) {
+      toast.error(errText(error));
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -61,11 +95,17 @@ export function AuthProvider({ children }) {
     toast.success('Signed out');
   }, []);
 
-  const homeFor = (role) =>
-    role === 'admin' ? '/admin' : role === 'hod' ? '/hod' : role === 'faculty' ? '/faculty' : '/student';
+  const homeFor = useCallback((role) => {
+    if (role === 'admin') return '/admin';
+    if (role === 'hod') return '/hod';
+    if (role === 'faculty') return '/faculty';
+    return '/student';
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout, homeFor }}>
+    <AuthContext.Provider
+      value={{ user, setUser, loading, login, register, logout, homeFor }}
+    >
       {children}
     </AuthContext.Provider>
   );
