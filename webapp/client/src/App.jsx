@@ -85,7 +85,7 @@ export default function App() {
   const { user } = useAuth();
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to={`/${user.role}`} replace /> : <LandingPage />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={user ? <Navigate to={`/${user.role}`} replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to={`/${user.role}`} replace /> : <CreateAccount />} />
 

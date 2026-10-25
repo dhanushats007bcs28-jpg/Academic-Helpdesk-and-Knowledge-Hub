@@ -1275,7 +1275,7 @@ export default function LandingPage() {
               className="btn btn-ghost"
               style={{
                 border: '1px solid rgba(255,255,255,0.4)',
-                color: '#ffffff',
+                color: '#1e3a8a',
                 fontWeight: 600,
                 padding: '12px 24px',
               }}
